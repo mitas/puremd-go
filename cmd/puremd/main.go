@@ -168,12 +168,11 @@ func fetchContent(cmd *cobra.Command, args []string) {
 	
 	if err != nil && client.IsInvalidURLError(err) {
 		// Try fallback to direct URL if API fails
-		fmt.Fprintf(os.Stderr, "⚠️  Warning: API request failed. Trying direct PureMD fallback...\n")
 		// If URL already has https:// prefix, we need to handle it correctly
 		fallbackURL := fallbackBaseURL + url
 		content, err = fetchWithHTTP(fallbackURL)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error with fallback: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	} else if err != nil {
