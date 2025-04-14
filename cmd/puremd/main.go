@@ -4,11 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/mitas/puremd-go/pkg/client"
 	"github.com/spf13/cobra"
+)
+
+const (
+	fallbackBaseURL = "https://pure.md/"
 )
 
 var (
@@ -110,6 +115,44 @@ func createClient() *client.Client {
 	)
 }
 
+// fetchWithAPI fetches content from the URL using the PureMD API
+func fetchWithAPI(url string) (string, error) {
+	c := createClient()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	
+	return c.FetchWebContent(ctx, url)
+}
+
+// fetchWithHTTP fetches content directly from puremd.com website
+func fetchWithHTTP(url string) (string, error) {
+	client := &http.Client{
+		Timeout: timeout,
+	}
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("creating request: %w", err)
+	}
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading response body: %w", err)
+	}
+	
+	return string(body), nil
+}
+
 func writeOutput(data string) error {
 	if outputFile == "" {
 		fmt.Print(data)
@@ -121,13 +164,19 @@ func writeOutput(data string) error {
 
 func fetchContent(cmd *cobra.Command, args []string) {
 	url := args[0]
-	c := createClient()
+	content, err := fetchWithAPI(url)
 	
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	content, err := c.FetchWebContent(ctx, url)
-	if err != nil {
+	if err != nil && client.IsInvalidURLError(err) {
+		// Try fallback to direct URL if API fails
+		fmt.Fprintf(os.Stderr, "⚠️  Warning: API request failed. Trying direct PureMD fallback...\n")
+		// If URL already has https:// prefix, we need to handle it correctly
+		fallbackURL := fallbackBaseURL + url
+		content, err = fetchWithHTTP(fallbackURL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error with fallback: %v\n", err)
+			os.Exit(1)
+		}
+	} else if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

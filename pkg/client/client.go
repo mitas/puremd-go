@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -26,6 +27,12 @@ var (
 	ErrInvalidURL       = errors.New("invalid URL provided")
 	ErrUnsupportedMedia = errors.New("unsupported media type: HTML responses only")
 )
+
+// IsInvalidURLError checks if the error is an invalid URL error
+func IsInvalidURLError(err error) bool {
+	return errors.Is(err, ErrInvalidURL) || 
+		(err != nil && strings.Contains(err.Error(), "invalid URL provided"))
+}
 
 // Client represents a PureMD API client
 type Client struct {
